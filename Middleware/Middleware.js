@@ -1,35 +1,47 @@
-import jwt from "jsonwebtoken";
-import User from "../Models/userModel.js";
-import dotenv from "dotenv";
+import jwt from 'jsonwebtoken';
 
-dotenv.config();
+export const authenticate = (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ message: "Authentication required" });
+        }
 
-export const authMiddleware = async (req, res, next) => {
-  //method 1
-  //const token = req.header("Authorization");
-  //method 2 bearer token
-  const token = req.headers.authorization?.split(' ')[1]
-
-  if (!token) {
-    return res.status(404).json({ message: "Token Missing" });
-  }
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    //console.log("decoded", decoded);
-    req.user = await User.findById(decoded._id).select("-password");
-    //console.log("req.user", req.user);
-    next();
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        return res.status(401).json({ message: "Invalid or expired token" });
+    }
 };
 
+export const authorizeRoles = (...roles) => {
+    return (req, res, next) => {
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({ message: "Access denied. Insufficient permissions" });
+        }
+        next();
+    };
+};
 
-export const adminMiddleware = async (req, res, next) => {
-  if (req.user.role != "admin") {
-    return res
-      .status(404)
-      .json({ message: "Access denied only admin can view" });
-  }
-  next();
+export const isAdmin = (req, res, next) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+};
+
+export const isProctor = (req, res, next) => {
+    if (req.user.role !== 'proctor' && req.user.role !== 'admin') {
+        return res.status(403).json({ message: "Proctor access required" });
+    }
+    next();
+};
+
+export const isStudent = (req, res, next) => {
+    if (req.user.role !== 'student') {
+        return res.status(403).json({ message: "Student access required" });
+    }
+    next();
 };
