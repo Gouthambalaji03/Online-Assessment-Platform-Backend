@@ -2,21 +2,31 @@ import User from "../Models/userModel.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { sendVerificationEmail, sendPasswordResetEmail } from "../Utils/mailer.js";
+import { sendPasswordResetEmail } from "../Utils/mailer.js";
 
 export const register = async (req, res) => {
     try {
-        const { firstName, lastName, email, password, role } = req.body;
+        const { firstName, lastName, email, password, role, secretCode } = req.body;
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message: "User already exists with this email" });
         }
 
+        if (role === 'admin') {
+            if (secretCode !== process.env.ADMIN_SECRET_CODE) {
+                return res.status(403).json({ message: "Invalid admin registration code" });
+            }
+        }
+
+        if (role === 'proctor') {
+            if (secretCode !== process.env.PROCTOR_SECRET_CODE) {
+                return res.status(403).json({ message: "Invalid proctor registration code" });
+            }
+        }
+
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
-
-        const verificationToken = crypto.randomBytes(32).toString('hex');
 
         const newUser = new User({
             firstName,
@@ -24,15 +34,13 @@ export const register = async (req, res) => {
             email,
             password: hashedPassword,
             role: role || 'student',
-            verificationToken
+            isVerified: true
         });
 
         await newUser.save();
 
-        await sendVerificationEmail(email, verificationToken);
-
         res.status(201).json({ 
-            message: "Registration successful. Please check your email to verify your account.",
+            message: "Registration successful! You can now login.",
             userId: newUser._id
         });
     } catch (error) {
@@ -40,32 +48,20 @@ export const register = async (req, res) => {
     }
 };
 
-export const verifyEmail = async (req, res) => {
-    try {
-        const { token } = req.params;
-
-        const user = await User.findOne({ verificationToken: token });
-        if (!user) {
-            return res.status(400).json({ message: "Invalid or expired verification token" });
-        }
-
-        user.isVerified = true;
-        user.verificationToken = undefined;
-        await user.save();
-
-        res.status(200).json({ message: "Email verified successfully" });
-    } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
-    }
-};
-
 export const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, role } = req.body;
 
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({ message: "Invalid email or password" });
+        }
+
+        if (role && user.role !== role) {
+            return res.status(403).json({ 
+                message: `This account is not registered as ${role}. Please use the correct login tab.`,
+                actualRole: user.role
+            });
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);

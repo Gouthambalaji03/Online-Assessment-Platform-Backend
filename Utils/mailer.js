@@ -8,37 +8,6 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-export const sendVerificationEmail = async (email, token) => {
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
-    
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: 'Verify Your Email - Online Assessment Platform',
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1e40af;">Email Verification</h2>
-                <p>Thank you for registering with our Online Assessment Platform.</p>
-                <p>Please click the button below to verify your email address:</p>
-                <a href="${verificationUrl}" 
-                   style="display: inline-block; padding: 12px 24px; background-color: #1e40af; 
-                          color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
-                    Verify Email
-                </a>
-                <p>Or copy and paste this link in your browser:</p>
-                <p style="color: #6b7280;">${verificationUrl}</p>
-                <p>This link will expire in 24 hours.</p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                <p style="color: #9ca3af; font-size: 12px;">
-                    If you didn't create an account, please ignore this email.
-                </p>
-            </div>
-        `
-    };
-
-    await transporter.sendMail(mailOptions);
-};
-
 export const sendPasswordResetEmail = async (email, token) => {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
     
