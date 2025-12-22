@@ -2,6 +2,7 @@ import Exam from "../Models/examModel.js";
 import Question from "../Models/questionModel.js";
 import User from "../Models/userModel.js";
 import Result from "../Models/resultModel.js";
+import { sendResultEmail, sendExamReminderEmail } from "../Utils/mailer.js";
 
 export const createExam = async (req, res) => {
     try {
@@ -431,6 +432,24 @@ export const submitExam = async (req, res) => {
 
         await result.save();
 
+        // Send result email to student
+        try {
+            const student = await User.findById(result.student);
+            if (student && student.email) {
+                await sendResultEmail(student.email, {
+                    examTitle: exam.title,
+                    obtainedMarks: result.obtainedMarks,
+                    totalMarks: result.totalMarks,
+                    percentage: result.percentage.toFixed(2),
+                    isPassed: result.isPassed,
+                    correctAnswers: result.correctAnswers,
+                    wrongAnswers: result.wrongAnswers
+                });
+            }
+        } catch (emailError) {
+            console.error('Failed to send result email:', emailError);
+        }
+
         if (exam.showResultImmediately) {
             res.status(200).json({
                 message: "Exam submitted successfully",
@@ -450,6 +469,43 @@ export const submitExam = async (req, res) => {
                 message: "Exam submitted successfully. Results will be available later."
             });
         }
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+// Send exam reminders to enrolled students
+export const sendExamReminders = async (req, res) => {
+    try {
+        const { examId } = req.params;
+
+        const exam = await Exam.findById(examId).populate('enrolledStudents', 'email firstName');
+        if (!exam) {
+            return res.status(404).json({ message: "Exam not found" });
+        }
+
+        const examDetails = {
+            title: exam.title,
+            date: new Date(exam.scheduledDate).toLocaleDateString(),
+            startTime: exam.startTime,
+            endTime: exam.endTime,
+            duration: exam.duration
+        };
+
+        let sentCount = 0;
+        for (const student of exam.enrolledStudents) {
+            try {
+                await sendExamReminderEmail(student.email, examDetails);
+                sentCount++;
+            } catch (err) {
+                console.error(`Failed to send reminder to ${student.email}:`, err);
+            }
+        }
+
+        res.status(200).json({
+            message: `Reminders sent to ${sentCount} students`,
+            totalEnrolled: exam.enrolledStudents.length
+        });
     } catch (error) {
         res.status(500).json({ message: "Server error", error: error.message });
     }
@@ -478,6 +534,101 @@ export const getExamStats = async (req, res) => {
             completedExams,
             categoryStats
         });
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+export const assignProctors = async (req, res) => {
+    try {
+        const { examId } = req.params;
+        const { proctorIds } = req.body;
+
+        const exam = await Exam.findById(examId);
+        if (!exam) {
+            return res.status(404).json({ message: "Exam not found" });
+        }
+
+        // Verify all proctors exist and have proctor role
+        const proctors = await User.find({
+            _id: { $in: proctorIds },
+            role: { $in: ['proctor', 'admin'] }
+        });
+
+        if (proctors.length !== proctorIds.length) {
+            return res.status(400).json({ message: "Some users are not valid proctors" });
+        }
+
+        exam.assignedProctors = proctorIds;
+        exam.updatedAt = Date.now();
+        await exam.save();
+
+        res.status(200).json({ message: "Proctors assigned successfully", exam });
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+export const removeProctor = async (req, res) => {
+    try {
+        const { examId, proctorId } = req.params;
+
+        const exam = await Exam.findById(examId);
+        if (!exam) {
+            return res.status(404).json({ message: "Exam not found" });
+        }
+
+        exam.assignedProctors = exam.assignedProctors.filter(
+            p => p.toString() !== proctorId
+        );
+        exam.updatedAt = Date.now();
+        await exam.save();
+
+        res.status(200).json({ message: "Proctor removed successfully", exam });
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+export const getProctorExams = async (req, res) => {
+    try {
+        const proctorId = req.user.userId;
+        const { status, page = 1, limit = 10 } = req.query;
+
+        const query = {
+            assignedProctors: proctorId,
+            isProctored: true
+        };
+
+        if (status) query.status = status;
+
+        const exams = await Exam.find(query)
+            .populate('createdBy', 'firstName lastName')
+            .populate('assignedProctors', 'firstName lastName email')
+            .skip((page - 1) * limit)
+            .limit(parseInt(limit))
+            .sort({ scheduledDate: -1 });
+
+        const total = await Exam.countDocuments(query);
+
+        res.status(200).json({
+            exams,
+            totalPages: Math.ceil(total / limit),
+            currentPage: parseInt(page),
+            total
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+export const getAvailableProctors = async (req, res) => {
+    try {
+        const proctors = await User.find({
+            role: { $in: ['proctor', 'admin'] }
+        }).select('firstName lastName email role');
+
+        res.status(200).json(proctors);
     } catch (error) {
         res.status(500).json({ message: "Server error", error: error.message });
     }

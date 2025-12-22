@@ -13,9 +13,14 @@ import {
     startExam,
     saveAnswer,
     submitExam,
-    getExamStats
+    getExamStats,
+    assignProctors,
+    removeProctor,
+    getProctorExams,
+    getAvailableProctors,
+    sendExamReminders
 } from '../Controllers/examController.js';
-import { authenticate, isAdmin, isStudent } from '../Middleware/Middleware.js';
+import { authenticate, isAdmin, isStudent, isProctor } from '../Middleware/Middleware.js';
 
 const router = express.Router();
 
@@ -36,6 +41,15 @@ router.post('/:examId/enroll', authenticate, enrollInExam);
 router.post('/:examId/start', authenticate, startExam);
 router.post('/answer/:resultId', authenticate, saveAnswer);
 router.post('/submit/:resultId', authenticate, submitExam);
+
+// Proctor assignment routes
+router.get('/proctors/available', authenticate, isAdmin, getAvailableProctors);
+router.get('/proctors/my-exams', authenticate, isProctor, getProctorExams);
+router.post('/:examId/proctors', authenticate, isAdmin, assignProctors);
+router.delete('/:examId/proctors/:proctorId', authenticate, isAdmin, removeProctor);
+
+// Email notification routes
+router.post('/:examId/send-reminders', authenticate, isAdmin, sendExamReminders);
 
 export default router;
 

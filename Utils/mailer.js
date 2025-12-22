@@ -1,16 +1,76 @@
 import nodemailer from 'nodemailer';
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+let transporter;
+
+// Check if email credentials are configured
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });
+} else {
+    console.warn('Email credentials not configured. Email functionality will be limited.');
+}
+
+export const sendVerificationEmail = async (email, token, firstName) => {
+    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
+
+    // Log the verification URL for development/debugging
+    console.log(`\n=== EMAIL VERIFICATION ===`);
+    console.log(`To: ${email}`);
+    console.log(`Verification URL: ${verifyUrl}`);
+    console.log(`===========================\n`);
+
+    if (!transporter) {
+        console.warn('Email transporter not configured. Verification URL logged above.');
+        return;
     }
-});
+
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Verify Your Email - Online Assessment Platform',
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #1e40af;">Welcome to AssessHub!</h2>
+                <p>Hi ${firstName},</p>
+                <p>Thank you for registering. Please verify your email address to activate your account.</p>
+                <a href="${verifyUrl}"
+                   style="display: inline-block; padding: 12px 24px; background-color: #10B981;
+                          color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
+                    Verify Email Address
+                </a>
+                <p>Or copy and paste this link in your browser:</p>
+                <p style="color: #6b7280;">${verifyUrl}</p>
+                <p>This link will expire in 24 hours.</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <p style="color: #9ca3af; font-size: 12px;">
+                    If you didn't create an account, please ignore this email.
+                </p>
+            </div>
+        `
+    };
+
+    await transporter.sendMail(mailOptions);
+};
 
 export const sendPasswordResetEmail = async (email, token) => {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
-    
+
+    // Log for development/debugging
+    console.log(`\n=== PASSWORD RESET ===`);
+    console.log(`To: ${email}`);
+    console.log(`Reset URL: ${resetUrl}`);
+    console.log(`======================\n`);
+
+    if (!transporter) {
+        console.warn('Email transporter not configured. Reset URL logged above.');
+        return;
+    }
+
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
@@ -20,8 +80,8 @@ export const sendPasswordResetEmail = async (email, token) => {
                 <h2 style="color: #1e40af;">Password Reset Request</h2>
                 <p>You have requested to reset your password.</p>
                 <p>Please click the button below to reset your password:</p>
-                <a href="${resetUrl}" 
-                   style="display: inline-block; padding: 12px 24px; background-color: #1e40af; 
+                <a href="${resetUrl}"
+                   style="display: inline-block; padding: 12px 24px; background-color: #1e40af;
                           color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
                     Reset Password
                 </a>
@@ -40,6 +100,11 @@ export const sendPasswordResetEmail = async (email, token) => {
 };
 
 export const sendExamReminderEmail = async (email, examDetails) => {
+    if (!transporter) {
+        console.warn('Email transporter not configured. Exam reminder not sent.');
+        return;
+    }
+
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
@@ -73,6 +138,11 @@ export const sendExamReminderEmail = async (email, examDetails) => {
 };
 
 export const sendResultEmail = async (email, resultDetails) => {
+    if (!transporter) {
+        console.warn('Email transporter not configured. Result email not sent.');
+        return;
+    }
+
     const statusColor = resultDetails.isPassed ? '#10b981' : '#ef4444';
     const statusText = resultDetails.isPassed ? 'PASSED' : 'FAILED';
 
