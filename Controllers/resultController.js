@@ -10,14 +10,53 @@ export const getStudentResults = async (req, res) => {
 
         const results = await Result.find({ student: userId })
             .populate('exam', 'title category scheduledDate duration')
+            .populate('answers.question', 'questionText questionType options correctAnswer explanation marks')
             .skip((page - 1) * limit)
             .limit(parseInt(limit))
             .sort({ submittedAt: -1 });
 
+        // Format results to include readable answer information
+        const formattedResults = results.map(result => {
+            const resultObj = result.toObject();
+            resultObj.answers = resultObj.answers.map(answer => {
+                let selectedAnswer = 'Not answered';
+                let correctAnswer = '';
+
+                if (answer.question) {
+                    // Get the correct answer based on question type
+                    if (answer.question.questionType === 'mcq') {
+                        const correctOption = answer.question.options?.find(opt => opt.isCorrect);
+                        correctAnswer = correctOption?.optionText || '';
+
+                        // Find what the student selected
+                        if (answer.selectedOption) {
+                            const selectedOption = answer.question.options?.find(
+                                opt => opt._id.toString() === answer.selectedOption
+                            );
+                            selectedAnswer = selectedOption?.optionText || answer.selectedOption;
+                        }
+                    } else if (answer.question.questionType === 'true_false') {
+                        correctAnswer = answer.question.correctAnswer || '';
+                        selectedAnswer = answer.selectedOption || 'Not answered';
+                    } else {
+                        correctAnswer = answer.question.correctAnswer || '';
+                        selectedAnswer = answer.selectedOption || 'Not answered';
+                    }
+                }
+
+                return {
+                    ...answer,
+                    selectedAnswer,
+                    correctAnswer
+                };
+            });
+            return resultObj;
+        });
+
         const total = await Result.countDocuments({ student: userId });
 
         res.status(200).json({
-            results,
+            results: formattedResults,
             totalPages: Math.ceil(total / limit),
             currentPage: parseInt(page),
             total
