@@ -159,11 +159,20 @@ export const removeQuestionFromExam = async (req, res) => {
 export const getAvailableExams = async (req, res) => {
     try {
         const { page = 1, limit = 10 } = req.query;
-        const now = new Date();
+        const userId = req.user.userId;
 
+        // Get start of today (midnight) for date comparison
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Find exams that are:
+        // 1. Status is 'scheduled' or 'active'
+        // 2. Scheduled date is today or in the future
+        // 3. User is NOT already enrolled
         const exams = await Exam.find({
             status: { $in: ['scheduled', 'active'] },
-            scheduledDate: { $gte: now }
+            scheduledDate: { $gte: today },
+            enrolledStudents: { $ne: userId }
         })
             .select('-questions')
             .populate('createdBy', 'firstName lastName')
@@ -173,7 +182,8 @@ export const getAvailableExams = async (req, res) => {
 
         const total = await Exam.countDocuments({
             status: { $in: ['scheduled', 'active'] },
-            scheduledDate: { $gte: now }
+            scheduledDate: { $gte: today },
+            enrolledStudents: { $ne: userId }
         });
 
         res.status(200).json({
@@ -224,7 +234,32 @@ export const getEnrolledExams = async (req, res) => {
             populate: { path: 'createdBy', select: 'firstName lastName' }
         });
 
-        res.status(200).json(user.enrolledExams);
+        // Get all results for this user to check completion status
+        const results = await Result.find({
+            student: userId,
+            status: 'submitted'
+        }).select('exam submittedAt obtainedMarks totalMarks percentage isPassed');
+
+        // Create a map of exam completion status
+        const completedExams = {};
+        results.forEach(result => {
+            completedExams[result.exam.toString()] = {
+                completed: true,
+                submittedAt: result.submittedAt,
+                obtainedMarks: result.obtainedMarks,
+                totalMarks: result.totalMarks,
+                percentage: result.percentage,
+                isPassed: result.isPassed
+            };
+        });
+
+        // Add completion status to each exam
+        const examsWithStatus = user.enrolledExams.map(exam => ({
+            ...exam.toObject(),
+            completionStatus: completedExams[exam._id.toString()] || { completed: false }
+        }));
+
+        res.status(200).json(examsWithStatus);
     } catch (error) {
         res.status(500).json({ message: "Server error", error: error.message });
     }
@@ -244,6 +279,25 @@ export const startExam = async (req, res) => {
             return res.status(403).json({ message: "Not enrolled in this exam" });
         }
 
+        // Check if exam has questions
+        if (!exam.questions || exam.questions.length === 0) {
+            return res.status(400).json({ message: "This exam has no questions. Please contact the administrator." });
+        }
+
+        // Check if user already completed this exam
+        const completedResult = await Result.findOne({
+            exam: examId,
+            student: userId,
+            status: 'submitted'
+        });
+
+        if (completedResult) {
+            return res.status(400).json({
+                message: "You have already completed this exam",
+                resultId: completedResult._id
+            });
+        }
+
         const existingResult = await Result.findOne({
             exam: examId,
             student: userId,
@@ -251,15 +305,34 @@ export const startExam = async (req, res) => {
         });
 
         if (existingResult) {
+            // Return questions for resuming exam
+            let questions = exam.questions;
+            if (exam.shuffleQuestions) {
+                questions = shuffleArray([...questions]);
+            }
+
+            const sanitizedQuestions = questions.map(q => ({
+                _id: q._id,
+                questionText: q.questionText,
+                questionType: q.questionType,
+                options: q.options.map(o => ({ optionText: o.optionText, _id: o._id })),
+                marks: q.marks,
+                negativeMarks: q.negativeMarks
+            }));
+
             return res.status(200).json({
                 message: "Resuming exam",
-                result: existingResult,
+                resultId: existingResult._id,
                 exam: {
-                    ...exam.toObject(),
-                    questions: exam.shuffleQuestions 
-                        ? shuffleArray(exam.questions) 
-                        : exam.questions
-                }
+                    _id: exam._id,
+                    title: exam.title,
+                    duration: exam.duration,
+                    perQuestionTime: exam.perQuestionTime,
+                    totalMarks: exam.totalMarks,
+                    isProctored: exam.isProctored,
+                    proctoringSettings: exam.proctoringSettings
+                },
+                questions: sanitizedQuestions
             });
         }
 
@@ -268,8 +341,8 @@ export const startExam = async (req, res) => {
             student: userId
         });
 
-        if (attemptCount >= exam.maxAttempts) {
-            return res.status(403).json({ message: "Maximum attempts reached" });
+        if (attemptCount >= (exam.maxAttempts || 1)) {
+            return res.status(403).json({ message: "Maximum attempts reached for this exam" });
         }
 
         const result = new Result({
