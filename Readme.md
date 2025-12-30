@@ -48,7 +48,7 @@ Before you begin, ensure you have the following installed:
 - **Node.js** (v14 or higher recommended)
 - **npm** (v6 or higher) or **yarn**
 - **MongoDB** (running locally or MongoDB Atlas connection)
-- **SMTP credentials** (for email functionality - optional)
+- **Brevo API key** (for email functionality - optional)
 
 ## 🛠️ Installation
 
@@ -80,14 +80,21 @@ Before you begin, ensure you have the following installed:
    JWT_SECRET=your_super_secret_jwt_key_here
    JWT_EXPIRE=7d
    
-   # Email Configuration (Optional - for email notifications)
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=587
-   SMTP_USER=your_email@gmail.com
-   SMTP_PASS=your_app_password
-   FROM_EMAIL=noreply@assessmentplatform.com
-   FROM_NAME=Online Assessment Platform
+   # Email Configuration (Optional - for email notifications using Brevo)
+   BREVO_KEY=your_brevo_api_key
+   BREVO_MAIL=your_verified_brevo_email@example.com
+   
+   # Frontend URL (for email verification and password reset links)
+   FRONTEND_URL=http://localhost:3000
    ```
+   
+   > **⚠️ Important - Role Registration Secret Codes (for testing):**
+   > ```env
+   > ADMIN_SECRET_CODE=ADMIN2024SECRET
+   > PROCTOR_SECRET_CODE=PROCTOR2024SECRET
+   > ```
+   > 
+   > These codes are required when registering users with `admin` or `proctor` roles. Keep these secure in production!
 
    **⚠️ Important:** Never commit your `.env` file to version control. Add it to `.gitignore`.
 
@@ -230,7 +237,10 @@ Authorization: Bearer <your_jwt_token>
 Database configuration is handled in `Database/dbConfig.js`. Ensure your MongoDB instance is running and the `MONGO_URI` in `.env` is correctly set.
 
 ### Email Configuration
-Email functionality is optional. If you don't configure SMTP settings, email-related features will be disabled. The mailer utility is located in `Utils/mailer.js`.
+Email functionality is optional and uses Brevo (formerly Sendinblue) API. If you don't configure `BREVO_KEY` and `BREVO_MAIL` in your `.env` file, email-related features will be disabled. The mailer utility is located in `Utils/mailer.js`. You can get your Brevo API key from [Brevo Dashboard](https://app.brevo.com/).
+
+### Role Registration
+To register users with `admin` or `proctor` roles, you need to provide the corresponding secret codes (`ADMIN_SECRET_CODE` and `PROCTOR_SECRET_CODE`) during registration. These should be kept secure and only shared with authorized personnel.
 
 ### Middleware
 Authentication and authorization middleware is located in `Middleware/Middleware.js`. This includes:
