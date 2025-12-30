@@ -1,174 +1,151 @@
-import nodemailer from 'nodemailer';
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const BREVO_KEY = process.env.BREVO_KEY;
+const BREVO_MAIL = process.env.BREVO_MAIL;
 
-let transporter;
+const sendEmail = async (to, subject, htmlContent) => {
+    if (!BREVO_KEY || !BREVO_MAIL) {
+        console.warn('Brevo credentials not configured. Email functionality will be limited.');
+        return;
+    }
 
-// Check if email credentials are configured
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        }
+    const emailData = {
+        sender: { email: BREVO_MAIL, name: 'AssessHub' },
+        to: [{ email: to }],
+        subject: subject,
+        htmlContent: htmlContent
+    };
+
+    const response = await fetch(BREVO_API_URL, {
+        method: 'POST',
+        headers: {
+            'accept': 'application/json',
+            'api-key': BREVO_KEY,
+            'content-type': 'application/json'
+        },
+        body: JSON.stringify(emailData)
     });
-} else {
-    console.warn('Email credentials not configured. Email functionality will be limited.');
-}
+
+    if (!response.ok) {
+        const error = await response.json();
+        console.error('Brevo API Error:', error);
+        throw new Error(`Failed to send email: ${error.message || 'Unknown error'}`);
+    }
+
+    return response.json();
+};
 
 export const sendVerificationEmail = async (email, token, firstName) => {
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
 
-    // Log the verification URL for development/debugging
     console.log(`\n=== EMAIL VERIFICATION ===`);
     console.log(`To: ${email}`);
     console.log(`Verification URL: ${verifyUrl}`);
     console.log(`===========================\n`);
 
-    if (!transporter) {
-        console.warn('Email transporter not configured. Verification URL logged above.');
-        return;
-    }
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">Welcome to AssessHub!</h2>
+            <p>Hi ${firstName},</p>
+            <p>Thank you for registering. Please verify your email address to activate your account.</p>
+            <a href="${verifyUrl}"
+               style="display: inline-block; padding: 12px 24px; background-color: #10B981;
+                      color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
+                Verify Email Address
+            </a>
+            <p>Or copy and paste this link in your browser:</p>
+            <p style="color: #6b7280;">${verifyUrl}</p>
+            <p>This link will expire in 24 hours.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #9ca3af; font-size: 12px;">
+                If you didn't create an account, please ignore this email.
+            </p>
+        </div>
+    `;
 
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: 'Verify Your Email - Online Assessment Platform',
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1e40af;">Welcome to AssessHub!</h2>
-                <p>Hi ${firstName},</p>
-                <p>Thank you for registering. Please verify your email address to activate your account.</p>
-                <a href="${verifyUrl}"
-                   style="display: inline-block; padding: 12px 24px; background-color: #10B981;
-                          color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
-                    Verify Email Address
-                </a>
-                <p>Or copy and paste this link in your browser:</p>
-                <p style="color: #6b7280;">${verifyUrl}</p>
-                <p>This link will expire in 24 hours.</p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                <p style="color: #9ca3af; font-size: 12px;">
-                    If you didn't create an account, please ignore this email.
-                </p>
-            </div>
-        `
-    };
-
-    await transporter.sendMail(mailOptions);
+    await sendEmail(email, 'Verify Your Email - Online Assessment Platform', htmlContent);
 };
 
 export const sendPasswordResetEmail = async (email, token) => {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-    // Log for development/debugging
     console.log(`\n=== PASSWORD RESET ===`);
     console.log(`To: ${email}`);
     console.log(`Reset URL: ${resetUrl}`);
     console.log(`======================\n`);
 
-    if (!transporter) {
-        console.warn('Email transporter not configured. Reset URL logged above.');
-        return;
-    }
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">Password Reset Request</h2>
+            <p>You have requested to reset your password.</p>
+            <p>Please click the button below to reset your password:</p>
+            <a href="${resetUrl}"
+               style="display: inline-block; padding: 12px 24px; background-color: #1e40af;
+                      color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
+                Reset Password
+            </a>
+            <p>Or copy and paste this link in your browser:</p>
+            <p style="color: #6b7280;">${resetUrl}</p>
+            <p>This link will expire in 1 hour.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #9ca3af; font-size: 12px;">
+                If you didn't request a password reset, please ignore this email.
+            </p>
+        </div>
+    `;
 
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: 'Password Reset - Online Assessment Platform',
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1e40af;">Password Reset Request</h2>
-                <p>You have requested to reset your password.</p>
-                <p>Please click the button below to reset your password:</p>
-                <a href="${resetUrl}"
-                   style="display: inline-block; padding: 12px 24px; background-color: #1e40af;
-                          color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
-                    Reset Password
-                </a>
-                <p>Or copy and paste this link in your browser:</p>
-                <p style="color: #6b7280;">${resetUrl}</p>
-                <p>This link will expire in 1 hour.</p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                <p style="color: #9ca3af; font-size: 12px;">
-                    If you didn't request a password reset, please ignore this email.
-                </p>
-            </div>
-        `
-    };
-
-    await transporter.sendMail(mailOptions);
+    await sendEmail(email, 'Password Reset - Online Assessment Platform', htmlContent);
 };
 
 export const sendExamReminderEmail = async (email, examDetails) => {
-    if (!transporter) {
-        console.warn('Email transporter not configured. Exam reminder not sent.');
-        return;
-    }
-
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: `Exam Reminder: ${examDetails.title} - Online Assessment Platform`,
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1e40af;">Exam Reminder</h2>
-                <p>This is a reminder for your upcoming exam:</p>
-                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h3 style="margin: 0 0 10px 0;">${examDetails.title}</h3>
-                    <p style="margin: 5px 0;"><strong>Date:</strong> ${examDetails.date}</p>
-                    <p style="margin: 5px 0;"><strong>Time:</strong> ${examDetails.startTime} - ${examDetails.endTime}</p>
-                    <p style="margin: 5px 0;"><strong>Duration:</strong> ${examDetails.duration} minutes</p>
-                </div>
-                <p>Please ensure you:</p>
-                <ul>
-                    <li>Have a stable internet connection</li>
-                    <li>Use a compatible browser (Chrome recommended)</li>
-                    <li>Are in a quiet environment</li>
-                    <li>Have your ID ready for verification (if required)</li>
-                </ul>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                <p style="color: #9ca3af; font-size: 12px;">
-                    Good luck with your exam!
-                </p>
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">Exam Reminder</h2>
+            <p>This is a reminder for your upcoming exam:</p>
+            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin: 0 0 10px 0;">${examDetails.title}</h3>
+                <p style="margin: 5px 0;"><strong>Date:</strong> ${examDetails.date}</p>
+                <p style="margin: 5px 0;"><strong>Time:</strong> ${examDetails.startTime} - ${examDetails.endTime}</p>
+                <p style="margin: 5px 0;"><strong>Duration:</strong> ${examDetails.duration} minutes</p>
             </div>
-        `
-    };
+            <p>Please ensure you:</p>
+            <ul>
+                <li>Have a stable internet connection</li>
+                <li>Use a compatible browser (Chrome recommended)</li>
+                <li>Are in a quiet environment</li>
+                <li>Have your ID ready for verification (if required)</li>
+            </ul>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #9ca3af; font-size: 12px;">
+                Good luck with your exam!
+            </p>
+        </div>
+    `;
 
-    await transporter.sendMail(mailOptions);
+    await sendEmail(email, `Exam Reminder: ${examDetails.title} - Online Assessment Platform`, htmlContent);
 };
 
 export const sendResultEmail = async (email, resultDetails) => {
-    if (!transporter) {
-        console.warn('Email transporter not configured. Result email not sent.');
-        return;
-    }
-
     const statusColor = resultDetails.isPassed ? '#10b981' : '#ef4444';
     const statusText = resultDetails.isPassed ? 'PASSED' : 'FAILED';
 
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: `Exam Results: ${resultDetails.examTitle} - Online Assessment Platform`,
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1e40af;">Exam Results</h2>
-                <p>Your results for ${resultDetails.examTitle} are now available:</p>
-                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h3 style="margin: 0 0 15px 0; color: ${statusColor};">${statusText}</h3>
-                    <p style="margin: 5px 0;"><strong>Score:</strong> ${resultDetails.obtainedMarks}/${resultDetails.totalMarks}</p>
-                    <p style="margin: 5px 0;"><strong>Percentage:</strong> ${resultDetails.percentage}%</p>
-                    <p style="margin: 5px 0;"><strong>Correct Answers:</strong> ${resultDetails.correctAnswers}</p>
-                    <p style="margin: 5px 0;"><strong>Wrong Answers:</strong> ${resultDetails.wrongAnswers}</p>
-                </div>
-                <p>Log in to your account to view detailed results and analysis.</p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                <p style="color: #9ca3af; font-size: 12px;">
-                    Online Assessment Platform
-                </p>
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">Exam Results</h2>
+            <p>Your results for ${resultDetails.examTitle} are now available:</p>
+            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin: 0 0 15px 0; color: ${statusColor};">${statusText}</h3>
+                <p style="margin: 5px 0;"><strong>Score:</strong> ${resultDetails.obtainedMarks}/${resultDetails.totalMarks}</p>
+                <p style="margin: 5px 0;"><strong>Percentage:</strong> ${resultDetails.percentage}%</p>
+                <p style="margin: 5px 0;"><strong>Correct Answers:</strong> ${resultDetails.correctAnswers}</p>
+                <p style="margin: 5px 0;"><strong>Wrong Answers:</strong> ${resultDetails.wrongAnswers}</p>
             </div>
-        `
-    };
+            <p>Log in to your account to view detailed results and analysis.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #9ca3af; font-size: 12px;">
+                Online Assessment Platform
+            </p>
+        </div>
+    `;
 
-    await transporter.sendMail(mailOptions);
+    await sendEmail(email, `Exam Results: ${resultDetails.examTitle} - Online Assessment Platform`, htmlContent);
 };
