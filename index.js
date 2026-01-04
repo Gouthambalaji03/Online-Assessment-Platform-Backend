@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './Database/dbConfig.js'
+import setupSwagger from './swagger.js';
 
 import authRoutes from './Routes/authRoute.js';
 import questionRoutes from './Routes/questionRoute.js';
@@ -18,6 +19,9 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 connectDB();
+
+// Setup Swagger documentation
+setupSwagger(app);
 
 app.get("/", (req, res) => {
     res.status(200).send("Welcome to Online Assessment Platform Backend");
@@ -37,5 +41,6 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 5000;
 
 app.listen(port, ()=>{
-    console.log(`Server running on port ${port}`)
+    console.log(`Server running on port ${port}`);
+    console.log(`Swagger documentation available at http://localhost:${port}/api-docs`);
 });

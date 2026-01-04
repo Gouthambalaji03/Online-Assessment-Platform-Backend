@@ -114,7 +114,39 @@ npm start
 
 The server will start on the port specified in your `.env` file (default: 5000).
 
-Visit `http://localhost:3000` to verify the server is running.
+Visit `http://localhost:5000` to verify the server is running.
+
+## 📚 API Documentation (Swagger)
+
+This project includes interactive API documentation powered by Swagger/OpenAPI.
+
+### Accessing Swagger UI
+
+Once the server is running, you can access the API documentation at:
+
+- **Swagger UI**: `http://localhost:5000/api-docs`
+- **Swagger JSON**: `http://localhost:5000/api-docs.json`
+
+### Features
+
+- Interactive API explorer
+- Try out endpoints directly from the browser
+- View request/response schemas
+- Authentication support (enter your JWT token)
+- All 63+ endpoints documented with:
+  - Request parameters and body schemas
+  - Response formats and status codes
+  - Role-based access requirements
+
+### Using Swagger UI
+
+1. Start the server (`npm run dev` or `npm start`)
+2. Open `http://localhost:5000/api-docs` in your browser
+3. To test authenticated endpoints:
+   - First, use the `/api/auth/login` endpoint to get a JWT token
+   - Click the "Authorize" button at the top
+   - Enter your token in the format: `your_jwt_token`
+   - Click "Authorize" to apply the token to all requests
 
 ## 📁 Project Structure
 
@@ -145,6 +177,7 @@ Online-Assessment-Platform-Backend/
 ├── Utils/               # Utility functions
 │   └── mailer.js
 ├── index.js             # Application entry point
+├── swagger.js           # Swagger/OpenAPI configuration
 ├── package.json         # Project dependencies and scripts
 └── Readme.md            # This file
 ```
@@ -229,6 +262,8 @@ Authorization: Bearer <your_jwt_token>
 - **bcrypt** - Password hashing
 - **cors** - Cross-Origin Resource Sharing
 - **dotenv** - Environment variable management
+- **swagger-jsdoc** - Swagger/OpenAPI specification generator
+- **swagger-ui-express** - Swagger UI for Express
 - **nodemon** - Development auto-reload (dev dependency)
 
 ## 🔧 Configuration
@@ -305,4 +340,4 @@ This project is licensed under the ISC License.
 
 ---
 
-For detailed API documentation and request/response examples, refer to the individual route and controller files.
+For detailed API documentation and request/response examples, visit the **Swagger UI** at `http://localhost:5000/api-docs` when the server is running.
